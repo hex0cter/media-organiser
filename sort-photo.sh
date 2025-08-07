@@ -1,4 +1,9 @@
 #!/bin/bash
+# IMPORTANT: This script requires exiftool to be installed.
+# Install it via Homebrew: `brew install exiftool`
+# This script organizes photos and videos into year/month directories based on their EXIF data.
+# If EXIF data is not available, it uses the file creation time.
+# !!!NOTE!!! This script only works on macOS due to the use of `stat` command options.
 
 # --- Functions ---
 
@@ -92,40 +97,42 @@ $FORCE && echo "⚠️  Force mode: Files without EXIF will be included."
 $DRY_RUN && echo "🧪 Dry-run mode: No files will really be moved."
 echo "==="
 
-# for filepath in "$SOURCE_DIR"/**/*.{jpg,jpeg,png,JPG,JPEG,PNG}; do
-find "$SOURCE_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | while read -r filepath; do
-  echo "Found $filepath ..."
+find "$SOURCE_DIR" -type f -not -name "._*" \( \
+  -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o \
+  -iname "*.mov" -o -iname "*.mp4"  -o -iname "*.m4v" -o -iname "*.avi" \
+  \) -print0 | while IFS= read -r -d '' filepath; do
   [ -f "$filepath" ] || continue
 
+  echo "Found $filepath ..."
   filename=$(basename "$filepath")
   ext="${filename##*.}"
 
   # Try EXIF
-  datetime=$(exiftool -DateTimeOriginal -s3 -d "%Y:%m:%d %H:%M:%S" "$filepath")
-  echo "date time from exif is ${datetime}"
+  datetime_parts=$(exiftool -q -p '$DateTimeOriginal# > $CreateDate# > $MediaCreateDate# > $TrackCreateDate# > $ModifyDate#' -d "%Y %m %b %d %H %M %S" "$filepath")
 
-  if [ -z "$datetime" ]; then
+  if [ -z "$datetime_parts" ]; then
     if $FORCE; then
       echo "⚠️  No EXIF for $filename — using file creation time"
-      datetime=$(stat -f "%SB" -t "%Y:%m:%d %H:%M:%S" "$filepath")
+      birth_ts=$(stat -f "%B" "$filepath")
+      modify_ts=$(stat -f "%m" "$filepath")
+
+      # Use the older (smaller) of the two timestamps
+      if [[ "$birth_ts" -lt "$modify_ts" ]]; then
+        timestamp=$birth_ts
+      else
+        timestamp=$modify_ts
+      fi
+
+      read -r year month_num month_name day hour min secs < <(date -r "$timestamp" "+%Y %m %b %d %H %M %S")
     else
-      echo "⏭️  Skipping $filename (no EXIF data)"
+      echo "⏭️  Skipping $filename (no EXIF data)..."
       continue
     fi
+  else
+      read -r year month_num month_name day hour min secs <<< "$datetime_parts"
   fi
 
-  # Parse date parts
-  year=$(echo "$datetime" | cut -d':' -f1)
-  month_num=$(echo "$datetime" | cut -d':' -f2)
-  month_name=$(date -jf "%m" "$month_num" +"%b")
-  day=$(echo "$datetime" | cut -d':' -f3 | cut -d' ' -f1)
-  time_part=$(echo "$datetime" | cut -d' ' -f2)
-  hour=$(echo "$time_part" | cut -d':' -f1)
-  min=$(echo "$time_part" | cut -d':' -f2)
-  sec_millis=$(echo "$time_part" | cut -d':' -f3)
-  millis=$(echo "$sec_millis" | cut -d'.' -f2)
-  secs=$(echo "$sec_millis" | cut -d'.' -f1)
-
+  month_num=$(printf "%02d" "$month_num")
   dest_dir="$DEST_ROOT/$year/$month_num-$month_name"
   mkdir -p "$dest_dir"
 
@@ -140,4 +147,3 @@ find "$SOURCE_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png
     echo "✅ Moved: $filename → $dest_path"
   fi
 done
-
