@@ -54,4 +54,4 @@ To sort files from `~/Desktop/Unsorted` into `~/Pictures/Organized`, including f
 ./sort-photo.sh -n -f ~/Desktop/Unsorted ~/Pictures/Organized
 
 # If everything looks good, run it for real
-./sort-photo.sh -f ~/Desktop/Unsorted
+./sort-photo.sh -f ~/Desktop/Unsorted ~/Pictures/Organized

@@ -89,7 +89,7 @@ check_exiftool
 
 # --- Main processing ---
 
-shopt -s globstar nullglob
+# shopt -s globstar nullglob
 
 echo "📂 Organizing photos from: $SOURCE_DIR"
 echo "📁 Destination root: $DEST_ROOT"
@@ -99,16 +99,23 @@ echo "==="
 
 find "$SOURCE_DIR" -type f -not -name "._*" \( \
   -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o \
-  -iname "*.mov" -o -iname "*.mp4"  -o -iname "*.m4v" -o -iname "*.avi" \
+  -iname "*.mov" -o -iname "*.mp4"  -o -iname "*.m4v" -o -iname "*.avi" -o \
+  -iname "*.mts" -o -iname "*.wmv"  -o -iname "*.dat" \
   \) -print0 | while IFS= read -r -d '' filepath; do
+
   [ -f "$filepath" ] || continue
 
   echo "Found $filepath ..."
   filename=$(basename "$filepath")
   ext="${filename##*.}"
 
-  # Try EXIF
-  datetime_parts=$(exiftool -q -p '$DateTimeOriginal# > $CreateDate# > $MediaCreateDate# > $TrackCreateDate# > $ModifyDate#' -d "%Y %m %b %d %H %M %S" "$filepath")
+  # Try EXIF, using -G to help find tags in different metadata groups.
+  # Prioritize the main EXIF/QuickTime dates, but fall back to the general ModifyDate.
+  datetime_parts=$(exiftool -q -p '$DateTimeOriginal# > $QuickTime:CreateDate# > $Keys:CreationDate# > $CreateDate# > $MediaCreateDate# > $TrackCreateDate# > $ModifyDate#' -d "%Y %m %b %d %H %M %S" "$filepath")
+
+  if [ -z "$datetime_parts" ]; then
+    datetime_parts=$(exiftool -q -m -api RequestAll=3 -p '${DateTimeOriginal;QuickTime:CreateDate;Keys:CreationDate;CreateDate;MediaCreateDate;TrackCreateDate;ModifyDate}' -d "%Y %m %b %d %H %M %S" "$filepath")
+  fi
 
   if [ -z "$datetime_parts" ]; then
     if $FORCE; then
@@ -132,7 +139,7 @@ find "$SOURCE_DIR" -type f -not -name "._*" \( \
       read -r year month_num month_name day hour min secs <<< "$datetime_parts"
   fi
 
-  month_num=$(printf "%02d" "$month_num")
+  month_num=$(printf "%02d" "$((10#$month_num))")
   dest_dir="$DEST_ROOT/$year/$month_num-$month_name"
   mkdir -p "$dest_dir"
 
@@ -141,9 +148,9 @@ find "$SOURCE_DIR" -type f -not -name "._*" \( \
   dest_path="$dest_dir/$safe_name"
 
   if $DRY_RUN; then
-    echo "🧪 Would move: $filename → $dest_path"
+    echo "🧪 Would move: $filepath → $dest_path"
   else
-    mv "$filepath" "$dest_path"
-    echo "✅ Moved: $filename → $dest_path"
+    mv -i "$filepath" "$dest_path"
+    echo "✅ Moved: $filepath → $dest_path"
   fi
 done
