@@ -98,7 +98,7 @@ $DRY_RUN && echo "🧪 Dry-run mode: No files will really be moved."
 echo "==="
 
 find "$SOURCE_DIR" -type f -not -name "._*" \( \
-  -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o \
+  -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.heic" -o \
   -iname "*.mov" -o -iname "*.mp4"  -o -iname "*.m4v" -o -iname "*.avi" -o \
   -iname "*.mts" -o -iname "*.wmv"  -o -iname "*.dat" \
   \) -print0 | while IFS= read -r -d '' filepath; do
@@ -111,10 +111,10 @@ find "$SOURCE_DIR" -type f -not -name "._*" \( \
 
   # Try EXIF, using -G to help find tags in different metadata groups.
   # Prioritize the main EXIF/QuickTime dates, but fall back to the general ModifyDate.
-  datetime_parts=$(exiftool -q -p '$DateTimeOriginal# > $QuickTime:CreateDate# > $Keys:CreationDate# > $CreateDate# > $MediaCreateDate# > $TrackCreateDate# > $ModifyDate#' -d "%Y %m %b %d %H %M %S" "$filepath")
+  datetime_parts=$(exiftool -q -p '$DateTimeOriginal# > $QuickTime:CreateDate# > $Keys:CreationDate# > $CreateDate# > $MediaCreateDate# > $TrackCreateDate# > $ModifyDate#' -d "%Y %m %b %d %H %M %S" "$filepath" 2>/dev/null)
 
   if [ -z "$datetime_parts" ]; then
-    datetime_parts=$(exiftool -q -m -api RequestAll=3 -p '${DateTimeOriginal;QuickTime:CreateDate;Keys:CreationDate;CreateDate;MediaCreateDate;TrackCreateDate;ModifyDate}' -d "%Y %m %b %d %H %M %S" "$filepath")
+    datetime_parts=$(exiftool -q -m -api RequestAll=3 -p '${DateTimeOriginal;QuickTime:CreateDate;Keys:CreationDate;CreateDate;MediaCreateDate;TrackCreateDate;ModifyDate}' -d "%Y %m %b %d %H %M %S" "$filepath" 2>/dev/null)
   fi
 
   if [ -z "$datetime_parts" ]; then
